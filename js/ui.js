@@ -583,15 +583,15 @@ const UI = {
             const whereValues = [];
             if (pkCol) {
               const pkIdx = columns.indexOf(pkCol);
-              whereParts.push(`"${pkCol}" = ?`);
+              whereParts.push(`${SqlUtils.quoteIdent(pkCol)} = ?`);
               whereValues.push(row[pkIdx]);
             } else {
               columns.forEach((c, i) => {
-                if (row[i] === null) whereParts.push(`"${c}" IS NULL`);
-                else { whereParts.push(`"${c}" = ?`); whereValues.push(row[i]); }
+                if (row[i] === null) whereParts.push(`${SqlUtils.quoteIdent(c)} IS NULL`);
+                else { whereParts.push(`${SqlUtils.quoteIdent(c)} = ?`); whereValues.push(row[i]); }
               });
             }
-            DB.run(`UPDATE "${tableName}" SET "${col}" = ? WHERE ${whereParts.join(' AND ')}`, [newVal || null, ...whereValues]);
+            DB.run(`UPDATE ${SqlUtils.quoteIdent(tableName)} SET ${SqlUtils.quoteIdent(col)} = ? WHERE ${whereParts.join(' AND ')}`, [newVal || null, ...whereValues]);
             this.loadDataPage(tabId);
             this.toast('已更新', 'success');
             this.updateHeader();

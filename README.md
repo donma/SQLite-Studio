@@ -1,24 +1,28 @@
-# SQLite Studio
+# SQLite Studio Web
 
 > AI 時代，Vibe Coding 當道。
-> 
-> 越來越多開發者用 Cursor、ChatGPT、Claude 等 AI 工具快速生成應用，而 **SQLite** 憑藉其零配置、輕量、單檔案的特性，成為這些 AI 驅動專案中最受歡迎的資料庫選擇——無論是本地工具、原型開發、CLI 應用，甚至是邊緣運算場景，幾乎隨處可見。
-> 
+>
+> 越來越多開發者用 Cursor、ChatGPT、Claude 等 AI 工具快速生成應用，而 **SQLite** 憑藉其零配置、輕量、單檔案的特性，成為這些 AI 驅動專案中最受歡迎的資料庫選擇。
+>
 > 但問題來了：**你怎麼檢視這些資料庫？**
-> 
+>
 > 傳統工具需要安裝、需要後端、需要連線設定。當你只想快速看一下表結構、改一筆資料、跑一句 SQL，這些流程都太重了。
-> 
-> **SQLite Studio** 就是為這個場景而生——
-> 
+>
+> **SQLite Studio Web** 就是為這個場景而生——
+>
 > **純前端、零後端、打開瀏覽器就能用。**
-> 
-> 一個 HTML 檔案，內建語法高亮、ERD 關聯圖、行內編輯、匯入匯出、索引管理、觸發器檢視……完整對齊 phpMyAdmin 等級的功能，卻輕到可以放在隨身碟裡帶著走。
-> 
-> 數據不離開你的電腦，不需要安裝任何東西，離線也能用。
-> 
-> **這就是 AI 時代該有的 SQLite 管理工具。**
 
-## 為什麼選擇 SQLite Studio？
+## Live Demo
+
+GitHub Pages demo will be available after deployment.
+
+## 專案定位
+
+SQLite Studio Web 是一個**純前端 SQLite 檢視與整理工具**，適合 AI 生成專案、本地資料包、離線工具、小型資料庫維護與快速 SQL 測試。
+
+提供接近 phpMyAdmin 操作習慣的常用資料庫管理功能。
+
+## 為什麼選擇 SQLite Studio Web？
 
 | 特色 | 說明 |
 |------|------|
@@ -28,6 +32,32 @@
 | 隱私安全 | 資料完全留在瀏覽器，不上傳任何伺服器 |
 | 輕量攜帶 | 整個資料夾不到 2MB，可放在 USB 隨身碟 |
 | file:// 支援 | 直接雙擊開啟，無需啟動本地伺服器 |
+
+## 適用場景
+
+SQLite Studio Web 適合處理小型到中型 SQLite 檔案，例如：
+
+- AI 生成工具附帶的 SQLite 資料庫
+- 本地資料包
+- 離線小工具
+- CLI 工具產生的資料
+- 原型專案
+- 小型 SQLite 檔案檢視與整理
+- CSV 匯入後快速整理資料
+
+## 不適用場景
+
+由於本工具基於 sql.js，資料庫會載入瀏覽器記憶體中執行，因此不建議用於：
+
+- 幾百 MB 以上的大型 SQLite 檔案
+- production database 直接維護
+- 多人協作資料庫
+- 高頻寫入場景
+- 需要長時間穩定執行的資料庫服務
+
+## Download
+
+下載 release zip 後，解壓縮並使用 Chrome 或 Edge 開啟 `index.html` 即可使用。
 
 ## 功能清單
 
@@ -66,7 +96,7 @@
 ### 結構管理
 - 檢視表結構（欄位、類型、主鍵、預設值）
 - 新增欄位
-- 欄位排序（上下移動，自動重建表）
+- 欄位排序（上下移動，自動重建表，失敗自動 rollback）
 - 查看 CREATE SQL
 - 匯出 SQL
 
@@ -103,11 +133,18 @@
 - 篩選條件產生器
 
 ### 匯入 / 匯出
-- 匯入 CSV（自動建立表）
+- 匯入 CSV（含預覽、欄位名稱清理、重複欄位處理）
 - 匯出表資料為 SQL
 - 匯出表資料為 CSV
 - 匯出表資料為 JSON
 - 匯出 ERD 為 SVG
+
+### 安全機制
+- 危險操作確認提示（含具體操作內容）
+- 欄位排序使用 transaction，失敗自動 rollback
+- SELECT / PRAGMA 不會標記 modified
+- 離開頁面前若 modified 為 true 會提醒儲存
+- SQL identifier 統一使用 quoteIdent 轉義
 
 ### 介面
 - 暗色主題
@@ -129,9 +166,55 @@
 | `Tab` | 縮排 |
 | `Escape` | 關閉彈窗 |
 
-### 技術特性
+## Sample Database
+
+可以使用 `samples/sample.sql` 建立測試資料庫，包含：
+
+- users（使用者）
+- posts（文章，含外鍵）
+- orders（訂單，含外鍵）
+- order_items（訂單明細，含外鍵）
+- Index（索引）
+- View（視圖）
+- Trigger（觸發器）
+
+使用方式：
+1. 在 SQLite Studio Web 中新建資料庫
+2. 開啟 `samples/sample.sql`
+3. 執行全部語句
+
+## file:// 模式限制
+
+本工具可以在 Chromium 系瀏覽器中直接以 file:// 開啟使用，但不同瀏覽器對本機檔案與 File System Access API 的支援不同。
+
+建議環境：
+- Chrome
+- Edge
+
+可能受限環境：
+- Firefox
+- Safari
+
+在不支援 File System Access API 的瀏覽器中，工具會退回手動選檔與下載儲存模式。
+
+## 安全提醒
+
+執行以下操作前，建議先另存備份：
+
+- DROP TABLE
+- ALTER TABLE
+- 欄位排序
+- 欄位刪除
+- 匯入資料覆蓋既有表格
+- VACUUM
+- 批次 UPDATE / DELETE
+
+本工具在瀏覽器本機端執行，不會將資料庫上傳到伺服器。但使用者仍應自行確認瀏覽器環境與檔案備份狀態。
+
+## 技術特性
+
 - 純前端，零後端
-- 支援 `file://` 協議
+- 支援 file:// 協議
 - sql.js (WebAssembly/asm.js) 執行 SQLite
 - dagre 自動圖形佈局
 - File System Access API 持久化
@@ -153,18 +236,11 @@ npx serve .
 ```
 開啟 `http://localhost:8000`
 
-### 產生範例資料庫
-1. 開啟 `generate_sample.html`
-2. 點擊「Generate & Download」
-3. 將下載的 `sample.sqlite` 放入專案目錄
-4. 在 SQLite Studio 中開啟
-
 ## 檔案結構
 
 ```
-DBLAB/
+SQLite-Studio/
 ├── index.html              # 主頁面
-├── generate_sample.html    # 範例資料庫產生器
 ├── README.md
 ├── css/
 │   └── style.css           # 樣式（暗色主題 + RWD）
@@ -173,12 +249,17 @@ DBLAB/
 │   ├── db.js               # SQLite 資料庫操作
 │   ├── editor.js           # SQL 編輯器 + 語法高亮 + 歷史 + 書籤
 │   ├── erd.js              # 關聯圖（SVG + dagre）
+│   ├── sql-utils.js        # SQL 工具（identifier escaping）
 │   ├── storage.js          # IndexedDB 持久化
 │   ├── table.js            # 表操作 CRUD + 匯入匯出
 │   └── ui.js               # UI 渲染 + 行內編輯 + 儀表板
-└── lib/
-    ├── sql-asm.js          # sql.js asm.js 版本
-    └── dagre.min.js        # 圖形自動佈局
+├── lib/
+│   ├── sql-asm.js          # sql.js asm.js 版本
+│   └── dagre.min.js        # 圖形自動佈局
+├── samples/
+│   └── sample.sql          # 範例資料庫 SQL
+└── docs/
+    └── test-checklist.md   # 測試清單
 ```
 
 ## 瀏覽器支援

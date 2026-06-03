@@ -87,6 +87,13 @@ const App = {
         sidebar.classList.remove('open');
       }
     });
+
+    window.addEventListener('beforeunload', (e) => {
+      if (DB.db && DB.modified) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
   },
 
   async tryRestore() {

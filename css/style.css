@@ -720,6 +720,11 @@ input, textarea, select, button { font-family: inherit; font-size: inherit; }
   font-weight: 600;
   color: var(--text-secondary);
 }
+.statusbar-version {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
 .statusbar-divider {
   color: var(--border-light);
 }

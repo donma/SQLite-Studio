@@ -1,293 +1,350 @@
 const DB = {
-  db: null,
-  SQL: null,
-  fileName: '',
-  fileHandle: null,
-  modified: false,
+    db: null,
+    SQL: null,
+    fileName: "",
+    fileHandle: null,
+    modified: false,
 
-  async init() {
-    this.SQL = await initSqlJs();
-  },
+    async init() {
+        this.SQL = await initSqlJs();
+    },
 
-  create() {
-    this.db = new this.SQL.Database();
-    this.fileName = 'untitled.sqlite';
-    this.fileHandle = null;
-    this.modified = false;
-    return this;
-  },
-
-  loadFromArrayBuffer(buffer, fileName) {
-    this.db = new this.SQL.Database(new Uint8Array(buffer));
-    this.fileName = fileName || 'untitled.sqlite';
-    this.modified = false;
-    return this;
-  },
-
-  hasFSAccess() {
-    return 'showOpenFilePicker' in window && window.isSecureContext;
-  },
-
-  async openFile() {
-    if (this.hasFSAccess()) {
-      try {
-        const [handle] = await window.showOpenFilePicker({
-          types: [{
-            description: 'SQLite Database',
-            accept: { 'application/x-sqlite': ['.sqlite', '.db', '.sqlite3', '.db3'] }
-          }]
-        });
-        const file = await handle.getFile();
-        const buf = await file.arrayBuffer();
-        this.fileHandle = handle;
-        this.loadFromArrayBuffer(buf, file.name);
-        await Storage.saveHandle('lastDB', handle);
-        return true;
-      } catch (e) {
-        if (e.name !== 'AbortError') throw e;
-        return false;
-      }
-    }
-    return this.openFileFallback();
-  },
-
-  openFileFallback() {
-    return new Promise((resolve) => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.sqlite,.db,.sqlite3,.db3';
-      input.onchange = async () => {
-        const file = input.files[0];
-        if (!file) { resolve(false); return; }
-        const buf = await file.arrayBuffer();
+    create() {
+        this.db = new this.SQL.Database();
+        this.fileName = "untitled.sqlite";
         this.fileHandle = null;
-        this.loadFromArrayBuffer(buf, file.name);
-        resolve(true);
-      };
-      input.click();
-    });
-  },
+        this.modified = false;
+        return this;
+    },
 
-  async openLast() {
-    try {
-      const handle = await Storage.getHandle('lastDB');
-      if (!handle) return false;
-      const perm = await handle.queryPermission({ mode: 'readwrite' });
-      if (perm === 'granted') {
-        const file = await handle.getFile();
-        const buf = await file.arrayBuffer();
-        this.fileHandle = handle;
-        this.loadFromArrayBuffer(buf, file.name);
-        return true;
-      }
-      if (perm === 'prompt') {
-        const newPerm = await handle.requestPermission({ mode: 'readwrite' });
-        if (newPerm === 'granted') {
-          const file = await handle.getFile();
-          const buf = await file.arrayBuffer();
-          this.fileHandle = handle;
-          this.loadFromArrayBuffer(buf, file.name);
-          return true;
+    loadFromArrayBuffer(buffer, fileName) {
+        this.db = new this.SQL.Database(new Uint8Array(buffer));
+        this.fileName = fileName || "untitled.sqlite";
+        this.modified = false;
+        return this;
+    },
+
+    hasFSAccess() {
+        return "showOpenFilePicker" in window && window.isSecureContext;
+    },
+
+    async openFile() {
+        if (this.hasFSAccess()) {
+            try {
+                const [handle] = await window.showOpenFilePicker({
+                    types: [
+                        {
+                            description: "SQLite Database",
+                            accept: {
+                                "application/x-sqlite": [
+                                    ".sqlite",
+                                    ".db",
+                                    ".sqlite3",
+                                    ".db3",
+                                ],
+                            },
+                        },
+                    ],
+                });
+                const file = await handle.getFile();
+                const buf = await file.arrayBuffer();
+                this.fileHandle = handle;
+                this.loadFromArrayBuffer(buf, file.name);
+                await Storage.saveHandle("lastDB", handle);
+                return true;
+            } catch (e) {
+                if (e.name !== "AbortError") throw e;
+                return false;
+            }
         }
-      }
-    } catch (e) { /* ignore */ }
-    return false;
-  },
+        return this.openFileFallback();
+    },
 
-  async save() {
-    if (!this.db) return false;
-    if (this.fileHandle) {
-      try {
-        const data = this.db.export();
-        const writable = await this.fileHandle.createWritable();
-        await writable.write(data);
-        await writable.close();
-        this.modified = false;
-        return true;
-      } catch (e) {
-        if (e.name !== 'AbortError') throw e;
-        return false;
-      }
-    }
-    return this.saveAs();
-  },
-
-  async saveAs() {
-    if (!this.db) return false;
-    if (this.hasFSAccess()) {
-      try {
-        const handle = await window.showSaveFilePicker({
-          suggestedName: this.fileName,
-          types: [{
-            description: 'SQLite Database',
-            accept: { 'application/x-sqlite': ['.sqlite'] }
-          }]
+    openFileFallback() {
+        return new Promise((resolve) => {
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = ".sqlite,.db,.sqlite3,.db3";
+            input.onchange = async () => {
+                const file = input.files[0];
+                if (!file) {
+                    resolve(false);
+                    return;
+                }
+                const buf = await file.arrayBuffer();
+                this.fileHandle = null;
+                this.loadFromArrayBuffer(buf, file.name);
+                resolve(true);
+            };
+            input.click();
         });
-        const data = this.db.export();
-        const writable = await handle.createWritable();
-        await writable.write(data);
-        await writable.close();
-        this.fileHandle = handle;
-        this.fileName = handle.name;
-        this.modified = false;
-        await Storage.saveHandle('lastDB', handle);
-        return true;
-      } catch (e) {
-        if (e.name !== 'AbortError') throw e;
+    },
+
+    async openLast() {
+        try {
+            const handle = await Storage.getHandle("lastDB");
+            if (!handle) return false;
+            const perm = await handle.queryPermission({ mode: "readwrite" });
+            if (perm === "granted") {
+                const file = await handle.getFile();
+                const buf = await file.arrayBuffer();
+                this.fileHandle = handle;
+                this.loadFromArrayBuffer(buf, file.name);
+                return true;
+            }
+            if (perm === "prompt") {
+                const newPerm = await handle.requestPermission({
+                    mode: "readwrite",
+                });
+                if (newPerm === "granted") {
+                    const file = await handle.getFile();
+                    const buf = await file.arrayBuffer();
+                    this.fileHandle = handle;
+                    this.loadFromArrayBuffer(buf, file.name);
+                    return true;
+                }
+            }
+        } catch (e) {
+            /* ignore */
+        }
         return false;
-      }
-    }
-    this.exportAsDownload();
-    this.modified = false;
-    return true;
-  },
+    },
 
-  exportAsDownload() {
-    if (!this.db) return;
-    const data = this.db.export();
-    const blob = new Blob([data], { type: 'application/x-sqlite' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = this.fileName;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  },
+    async save() {
+        if (!this.db) return false;
+        if (this.fileHandle) {
+            try {
+                const data = this.db.export();
+                const writable = await this.fileHandle.createWritable();
+                await writable.write(data);
+                await writable.close();
+                this.modified = false;
+                return true;
+            } catch (e) {
+                if (e.name !== "AbortError") throw e;
+                return false;
+            }
+        }
+        return this.saveAs();
+    },
 
-  run(sql, params = []) {
-    if (!this.db) throw new Error('未開啟數據庫');
-    try {
-      const result = this.db.exec(sql, params);
-      this.modified = true;
-      return result;
-    } catch (e) {
-      throw e;
-    }
-  },
+    async saveAs() {
+        if (!this.db) return false;
+        if (this.hasFSAccess()) {
+            try {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: this.fileName,
+                    types: [
+                        {
+                            description: "SQLite Database",
+                            accept: { "application/x-sqlite": [".sqlite"] },
+                        },
+                    ],
+                });
+                const data = this.db.export();
+                const writable = await handle.createWritable();
+                await writable.write(data);
+                await writable.close();
+                this.fileHandle = handle;
+                this.fileName = handle.name;
+                this.modified = false;
+                await Storage.saveHandle("lastDB", handle);
+                return true;
+            } catch (e) {
+                if (e.name !== "AbortError") throw e;
+                return false;
+            }
+        }
+        this.exportAsDownload();
+        this.modified = false;
+        return true;
+    },
 
-  getTableNames() {
-    if (!this.db) return [];
-    const result = this.run("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
-    return result.length > 0 ? result[0].values.map(r => r[0]) : [];
-  },
+    exportAsDownload() {
+        if (!this.db) return;
+        const data = this.db.export();
+        const blob = new Blob([data], { type: "application/x-sqlite" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = this.fileName;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    },
 
-  getViewNames() {
-    if (!this.db) return [];
-    const result = this.run("SELECT name FROM sqlite_master WHERE type='view' ORDER BY name");
-    return result.length > 0 ? result[0].values.map(r => r[0]) : [];
-  },
+    // Query: SELECT / PRAGMA / EXPLAIN — does NOT mark modified
+    query(sql, params = []) {
+        if (!this.db) throw new Error("Database is not opened.");
+        return this.db.exec(sql, params || []);
+    },
 
-  getIndexNames() {
-    if (!this.db) return [];
-    const result = this.run("SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%' ORDER BY name");
-    return result.length > 0 ? result[0].values.map(r => r[0]) : [];
-  },
+    // Execute: INSERT / UPDATE / DELETE / CREATE / ALTER / DROP — marks modified
+    execute(sql, params = []) {
+        if (!this.db) throw new Error("Database is not opened.");
+        const result = this.db.exec(sql, params || []);
+        this.modified = true;
+        return result;
+    },
 
-  getTriggerNames() {
-    if (!this.db) return [];
-    const result = this.run("SELECT name FROM sqlite_master WHERE type='trigger' ORDER BY name");
-    return result.length > 0 ? result[0].values.map(r => r[0]) : [];
-  },
+    // Legacy run: auto-detect if write operation
+    run(sql, params = []) {
+        if (!this.db) throw new Error("Database is not opened.");
+        const result = this.db.exec(sql, params || []);
+        if (SqlUtils.isWriteSql(sql)) {
+            this.modified = true;
+        }
+        return result;
+    },
 
-  getTableInfo(tableName) {
-    const result = this.run(`PRAGMA table_info('${tableName.replace(/'/g, "''")}')`);
-    if (result.length === 0) return [];
-    return result[0].values.map(row => ({
-      cid: row[0],
-      name: row[1],
-      type: row[2],
-      notnull: row[3],
-      default_value: row[4],
-      pk: row[5]
-    }));
-  },
+    getTableNames() {
+        if (!this.db) return [];
+        const result = this.query(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+        );
+        return result.length > 0 ? result[0].values.map((r) => r[0]) : [];
+    },
 
-  getTableCount(tableName) {
-    try {
-      const result = this.run(`SELECT COUNT(*) FROM "${tableName.replace(/"/g, '""')}"`);
-      return result[0]?.values[0]?.[0] ?? 0;
-    } catch { return 0; }
-  },
+    getViewNames() {
+        if (!this.db) return [];
+        const result = this.query(
+            "SELECT name FROM sqlite_master WHERE type='view' ORDER BY name"
+        );
+        return result.length > 0 ? result[0].values.map((r) => r[0]) : [];
+    },
 
-  getTableData(tableName, { offset = 0, limit = 100, orderBy = null, orderDir = 'ASC', where = '' } = {}) {
-    const safeName = `"${tableName.replace(/"/g, '""')}"`;
-    let sql = `SELECT * FROM ${safeName}`;
-    if (where) sql += ` WHERE ${where}`;
-    if (orderBy) sql += ` ORDER BY "${orderBy.replace(/"/g, '""')}" ${orderDir === 'DESC' ? 'DESC' : 'ASC'}`;
-    sql += ` LIMIT ${limit} OFFSET ${offset}`;
+    getIndexNames() {
+        if (!this.db) return [];
+        const result = this.query(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+        );
+        return result.length > 0 ? result[0].values.map((r) => r[0]) : [];
+    },
 
-    const countSql = `SELECT COUNT(*) FROM ${safeName}${where ? ' WHERE ' + where : ''}`;
+    getTriggerNames() {
+        if (!this.db) return [];
+        const result = this.query(
+            "SELECT name FROM sqlite_master WHERE type='trigger' ORDER BY name"
+        );
+        return result.length > 0 ? result[0].values.map((r) => r[0]) : [];
+    },
 
-    const data = this.run(sql);
-    const countResult = this.run(countSql);
-    const total = countResult[0]?.values[0]?.[0] ?? 0;
+    getTableInfo(tableName) {
+        const safe = tableName.replace(/'/g, "''");
+        const result = this.query(`PRAGMA table_info('${safe}')`);
+        if (result.length === 0) return [];
+        return result[0].values.map((row) => ({
+            cid: row[0],
+            name: row[1],
+            type: row[2],
+            notnull: row[3],
+            default_value: row[4],
+            pk: row[5],
+        }));
+    },
 
-    const columns = data.length > 0 ? data[0].columns : [];
-    const rows = data.length > 0 ? data[0].values : [];
+    getTableCount(tableName) {
+        try {
+            const t = SqlUtils.quoteIdent(tableName);
+            const result = this.query(`SELECT COUNT(*) FROM ${t}`);
+            return result[0]?.values[0]?.[0] ?? 0;
+        } catch {
+            return 0;
+        }
+    },
 
-    return { columns, rows, total };
-  },
+    getTableData(
+        tableName,
+        { offset = 0, limit = 100, orderBy = null, orderDir = "ASC", where = "" } = {}
+    ) {
+        const t = SqlUtils.quoteIdent(tableName);
+        let sql = `SELECT * FROM ${t}`;
+        if (where) sql += ` WHERE ${where}`;
+        if (orderBy) {
+            const col = SqlUtils.quoteIdent(orderBy);
+            sql += ` ORDER BY ${col} ${orderDir === "DESC" ? "DESC" : "ASC"}`;
+        }
+        sql += ` LIMIT ${limit} OFFSET ${offset}`;
 
-  getCreateSQL(tableName) {
-    const result = this.run(`SELECT sql FROM sqlite_master WHERE name = ?`, [tableName]);
-    return result[0]?.values[0]?.[0] || '';
-  },
+        const countSql = `SELECT COUNT(*) FROM ${t}${where ? " WHERE " + where : ""}`;
 
-  getDatabaseInfo() {
-    const tables = this.getTableNames();
-    const views = this.getViewNames();
-    const indexes = this.getIndexNames();
-    const triggers = this.getTriggerNames();
-    let totalPages = 0;
-    try {
-      const r = this.run("PRAGMA page_count");
-      totalPages = r[0]?.values[0]?.[0] ?? 0;
-    } catch {}
-    let pageSize = 0;
-    try {
-      const r = this.run("PRAGMA page_size");
-      pageSize = r[0]?.values[0]?.[0] ?? 0;
-    } catch {}
-    return {
-      tables, views, indexes, triggers,
-      size: totalPages * pageSize,
-      tableCount: tables.length,
-      viewCount: views.length,
-      indexCount: indexes.length,
-      triggerCount: triggers.length
-    };
-  },
+        const data = this.query(sql);
+        const countResult = this.query(countSql);
+        const total = countResult[0]?.values[0]?.[0] ?? 0;
 
-  vacuum() {
-    if (!this.db) throw new Error('未開啟數據庫');
-    const before = this.db.export().length;
-    this.run('VACUUM');
-    const after = this.db.export().length;
-    return { before, after, saved: before - after };
-  },
+        const columns = data.length > 0 ? data[0].columns : [];
+        const rows = data.length > 0 ? data[0].values : [];
 
-  integrityCheck() {
-    if (!this.db) throw new Error('未開啟數據庫');
-    const result = this.run('PRAGMA integrity_check');
-    return result.length > 0 ? result[0].values : [];
-  },
+        return { columns, rows, total };
+    },
 
-  getTableStats(tableName) {
-    const info = this.getTableInfo(tableName);
-    const count = this.getTableCount(tableName);
-    let pageCount = 0;
-    try {
-      const r = this.run(`PRAGMA page_count`);
-      pageCount = r[0]?.values[0]?.[0] ?? 0;
-    } catch {}
-    let pageSize = 0;
-    try {
-      const r = this.run(`PRAGMA page_size`);
-      pageSize = r[0]?.values[0]?.[0] ?? 0;
-    } catch {}
-    return {
-      columns: info.length,
-      rows: count,
-      size: pageCount * pageSize
-    };
-  }
+    getCreateSQL(tableName) {
+        const result = this.query(
+            "SELECT sql FROM sqlite_master WHERE name = ?",
+            [tableName]
+        );
+        return result[0]?.values[0]?.[0] || "";
+    },
+
+    getDatabaseInfo() {
+        const tables = this.getTableNames();
+        const views = this.getViewNames();
+        const indexes = this.getIndexNames();
+        const triggers = this.getTriggerNames();
+        let totalPages = 0;
+        try {
+            const r = this.query("PRAGMA page_count");
+            totalPages = r[0]?.values[0]?.[0] ?? 0;
+        } catch {}
+        let pageSize = 0;
+        try {
+            const r = this.query("PRAGMA page_size");
+            pageSize = r[0]?.values[0]?.[0] ?? 0;
+        } catch {}
+        return {
+            tables,
+            views,
+            indexes,
+            triggers,
+            size: totalPages * pageSize,
+            tableCount: tables.length,
+            viewCount: views.length,
+            indexCount: indexes.length,
+            triggerCount: triggers.length,
+        };
+    },
+
+    vacuum() {
+        if (!this.db) throw new Error("Database is not opened.");
+        const before = this.db.export().length;
+        this.execute("VACUUM");
+        const after = this.db.export().length;
+        return { before, after, saved: before - after };
+    },
+
+    integrityCheck() {
+        if (!this.db) throw new Error("Database is not opened.");
+        const result = this.query("PRAGMA integrity_check");
+        return result.length > 0 ? result[0].values : [];
+    },
+
+    getTableStats(tableName) {
+        const info = this.getTableInfo(tableName);
+        const count = this.getTableCount(tableName);
+        return { columns: info.length, rows: count };
+    },
+
+    begin() {
+        this.query("BEGIN TRANSACTION");
+    },
+
+    commit() {
+        this.execute("COMMIT");
+    },
+
+    rollback() {
+        try {
+            this.query("ROLLBACK");
+        } catch (e) {
+            console.error("Rollback failed:", e);
+        }
+    },
 };
