@@ -14,7 +14,7 @@
 
 ## Live Demo
 
-GitHub Pages demo will be available after deployment.
+https://donma.github.io/SQLite-Studio/
 
 ## 專案定位
 
