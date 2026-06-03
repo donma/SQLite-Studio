@@ -802,7 +802,7 @@ input, textarea, select, button { font-family: inherit; font-size: inherit; }
   word-wrap: break-word;
   pointer-events: none;
   overflow: auto;
-  color: transparent;
+  color: var(--text-secondary);
   tab-size: 2;
 }
 .sql-editor {
