@@ -302,8 +302,7 @@ const Editor = {
       ${hasError ? `<span class="badge badge-error">${errorCount} 錯誤</span>` : ''}
       <span class="badge badge-success">${successCount} 成功</span>
       <span>共 ${totalRows} 行</span>
-      <span>執行時間: ${elapsed}ms</span>
-      ${tab.lastResult && tab.lastResult.columns.length >= 2 ? `<button class="btn btn-sm btn-ghost" data-action="show-chart" style="margin-left:auto"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="12" width="4" height="9"/><rect x="10" y="7" width="4" height="14"/><rect x="17" y="3" width="4" height="18"/></svg> 圖表</button>` : ''}`;
+      <span>執行時間: ${elapsed}ms</span>`;
 
     let html = '';
     allResults.forEach((item, idx) => {
@@ -336,24 +335,17 @@ const Editor = {
 
       html += '<table class="data-table"><thead><tr>';
       html += '<th style="width:40px">#</th>';
-      result.columns.forEach((col, ci) => { html += `<th data-col="${UI.esc(col)}" data-idx="${ci}">${UI.esc(col)}</th>`; });
+      result.columns.forEach(col => { html += `<th>${UI.esc(col)}</th>`; });
       html += '</tr></thead><tbody>';
 
       result.values.forEach((row, ri) => {
-        html += `<tr data-row="${ri}"><td style="color:var(--text-muted);font-size:11px">${ri + 1}</td>`;
-        row.forEach((cell, ci) => {
-          const col = result.columns[ci];
+        html += `<tr><td style="color:var(--text-muted);font-size:11px">${ri + 1}</td>`;
+        row.forEach(cell => {
           let cls = '', display = '';
           if (cell === null) { cls = 'null'; display = 'NULL'; }
-          else {
-            const enhanced = Enhancements.renderCell(cell);
-            if (enhanced.enhanced) {
-              cls = 'enhanced';
-              display = enhanced.html;
-            } else if (typeof cell === 'number') { cls = 'number'; display = cell; }
-            else { cls = 'string'; display = UI.esc(String(cell)); }
-          }
-          html += `<td class="${cls}" data-col="${UI.esc(col)}" data-idx="${ci}" data-type="${typeof cell}" tabindex="-1" title="${UI.esc(String(cell ?? 'NULL'))}">${display}</td>`;
+          else if (typeof cell === 'number') { cls = 'number'; display = cell; }
+          else { cls = 'string'; display = UI.esc(String(cell)); }
+          html += `<td class="${cls}" title="${UI.esc(String(cell ?? 'NULL'))}">${display}</td>`;
         });
         html += '</tr>';
       });
@@ -361,20 +353,6 @@ const Editor = {
     });
 
     wrapper.innerHTML = html;
-    
-    // Initialize cell selection and keyboard navigation for query results
-    const table = wrapper.querySelector('.data-table');
-    if (table) {
-      UI.initCellSelection(table, tabId);
-      UI.initKeyboardNavigation(table, tabId);
-    }
-
-    // Chart button
-    const chartBtn = resultsInfo.querySelector('[data-action="show-chart"]');
-    if (chartBtn && tab.lastResult) {
-      chartBtn.onclick = () => Enhancements.showChartModal(tab.lastResult.columns, tab.lastResult.values);
-    }
-    
     UI.toast(`${successCount} 條語句完成 (${elapsed}ms)`, hasError ? 'info' : 'success');
   },
 
@@ -431,44 +409,14 @@ const Editor = {
     const highlight = panel.querySelector('[data-field="highlight"]');
     let sql = editor.value;
 
-    // Normalize whitespace
     sql = sql.replace(/\s+/g, ' ').trim();
-
-    // Keywords that start a new line (major)
-    const majorKeywords = ['SELECT', 'FROM', 'WHERE', 'ORDER BY', 'GROUP BY', 'HAVING', 'LIMIT', 'OFFSET', 'UNION', 'UNION ALL', 'INTERSECT', 'EXCEPT'];
-    // Keywords that start a new line with indent (minor)
-    const minorKeywords = ['AND', 'OR', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'OUTER JOIN', 'CROSS JOIN', 'ON', 'SET', 'VALUES', 'INTO', 'UPDATE', 'DELETE FROM', 'INSERT INTO', 'CREATE TABLE', 'ALTER TABLE', 'DROP TABLE', 'CREATE INDEX', 'DROP INDEX'];
-
-    // Handle commas - put each on new line in SELECT
-    sql = sql.replace(/,\s*(?![^()]*\))/g, ',\n  ');
-
-    // Handle major keywords
-    majorKeywords.forEach(kw => {
+    const breakKeywords = ['FROM', 'WHERE', 'AND', 'OR', 'ORDER BY', 'GROUP BY', 'HAVING', 'LIMIT', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'ON', 'SET', 'VALUES', 'UNION', 'UNION ALL'];
+    breakKeywords.forEach(kw => {
       const regex = new RegExp(`\\b${kw}\\b`, 'gi');
       sql = sql.replace(regex, '\n' + kw);
     });
 
-    // Handle minor keywords
-    minorKeywords.forEach(kw => {
-      const regex = new RegExp(`\\b${kw}\\b`, 'gi');
-      sql = sql.replace(regex, '\n  ' + kw);
-    });
-
-    // Handle subqueries - add indentation
-    sql = sql.replace(/\(\s*SELECT/gi, '(\n    SELECT');
-    sql = sql.replace(/\)\s*(AS)/gi, '\n  ) $1');
-
-    // Clean up extra newlines
-    sql = sql.replace(/\n\s*\n/g, '\n').trim();
-
-    // Uppercase keywords
-    const allKeywords = [...majorKeywords, ...minorKeywords, 'AS', 'IN', 'NOT', 'NULL', 'IS', 'BETWEEN', 'LIKE', 'EXISTS', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'ASC', 'DESC', 'DISTINCT', 'PRIMARY KEY', 'FOREIGN KEY', 'REFERENCES', 'CASCADE', 'SET NULL', 'NO ACTION', 'AUTOINCREMENT', 'CONSTRAINT', 'CHECK', 'DEFAULT', 'NOT NULL', 'UNIQUE'];
-    allKeywords.forEach(kw => {
-      const regex = new RegExp(`\\b${kw.replace(/\s+/g, '\\s+')}\\b`, 'gi');
-      sql = sql.replace(regex, kw);
-    });
-
-    editor.value = sql;
+    editor.value = sql.trim();
     highlight.innerHTML = this.highlightSQL(editor.value);
   },
 

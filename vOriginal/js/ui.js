@@ -2,14 +2,6 @@ const UI = {
   tabs: [],
   activeTabId: null,
   tabCounter: 0,
-  cellSelection: {
-    active: false,
-    startRow: -1,
-    startCol: -1,
-    endRow: -1,
-    endCol: -1,
-    tableEl: null
-  },
 
   // ── Toast ──
   toast(message, type = 'info') {
@@ -203,9 +195,7 @@ const UI = {
           { label: '匯出 SQL', action: 'exportSQL' },
           { label: '匯出 CSV', action: 'exportCSV' },
           { label: '匯出 JSON', action: 'exportJSON' },
-          { label: '匯出 (遮罩)', action: 'export-masked' },
           { divider: true },
-          { label: '生成資料', action: 'generate-data' },
           { label: '複製表', action: 'duplicate' },
           { label: '清空表', action: 'truncate' },
           { label: '刪除表', action: 'drop', danger: true }
@@ -225,8 +215,6 @@ const UI = {
       case 'exportSQL': TableOps.exportSQL(tableName); break;
       case 'exportCSV': TableOps.exportCSV(tableName); break;
       case 'exportJSON': TableOps.exportJSON(tableName); break;
-      case 'export-masked': Enhancements2.showMaskedExportDialog(tableName); break;
-      case 'generate-data': Enhancements2.showGenerateDataDialog(tableName); break;
       case 'duplicate': TableOps.duplicateTable(tableName); break;
       case 'truncate': TableOps.truncateTable(tableName); break;
       case 'drop': TableOps.dropTable(tableName); break;
@@ -441,7 +429,6 @@ const UI = {
           篩選
         </button>
         <button class="btn btn-sm btn-ghost" data-action="export-csv">匯出 CSV</button>
-        <input type="text" class="data-search-input" data-field="data-search" placeholder="搜尋...">
         <div class="pagination">
           <button class="icon-btn" data-action="prev-page" title="上一頁"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15,18 9,12 15,6"/></svg></button>
           <span class="pagination-info" data-field="page-info">1 - 100 / 0</span>
@@ -475,9 +462,6 @@ const UI = {
       const data = DB.getTableData(tableName, { offset: tab.offset, limit: tab.limit, where: tab.where });
       if (tab.offset + tab.limit < data.total) { tab.offset += tab.limit; this.loadDataPage(tabId); }
     };
-
-    const searchInput = panel.querySelector('[data-field="data-search"]');
-    this.initDataSearch(searchInput, tabId);
 
     this.loadDataPage(tabId);
   },
@@ -514,14 +498,8 @@ const UI = {
           let cls = '';
           let display = '';
           if (cell === null) { cls = 'null'; display = 'NULL'; }
-          else {
-            const enhanced = Enhancements.renderCell(cell);
-            if (enhanced.enhanced) {
-              cls = 'enhanced';
-              display = enhanced.html;
-            } else if (typeof cell === 'number') { cls = 'number'; display = cell; }
-            else { cls = 'string'; display = this.esc(String(cell)); }
-          }
+          else if (typeof cell === 'number') { cls = 'number'; display = cell; }
+          else { cls = 'string'; display = this.esc(String(cell)); }
           html += `<td class="${cls}" data-col="${this.esc(col)}" data-idx="${ci}" data-type="${typeof cell}" title="${this.esc(String(cell ?? 'NULL'))}">${display}</td>`;
         });
         html += `<td><div class="cell-actions">
@@ -577,18 +555,6 @@ const UI = {
           TableOps.deleteRow(tableName, data.columns, data.rows[ri], info, pkCol, () => this.loadDataPage(tabId));
         };
       });
-
-      // Initialize cell selection and keyboard navigation
-      const table = wrapper.querySelector('.data-table');
-      if (table) {
-        this.initCellSelection(table, tabId);
-        this.initKeyboardNavigation(table, tabId);
-        
-        // Make data cells focusable
-        table.querySelectorAll('td[data-col]').forEach(td => {
-          td.setAttribute('tabindex', '-1');
-        });
-      }
 
     } catch (e) {
       wrapper.innerHTML = `<div class="empty-state"><p style="color:var(--red)">${this.esc(e.message)}</p></div>`;
@@ -948,290 +914,6 @@ const UI = {
       dbName.textContent = '未開啟數據庫';
       btnSave.disabled = true;
     }
-  },
-
-  // ── Cell Selection ──
-  initCellSelection(tableEl, tabId) {
-    const sel = this.cellSelection;
-    let isSelecting = false;
-
-    tableEl.addEventListener('mousedown', (e) => {
-      const td = e.target.closest('td[data-col]');
-      if (!td || e.button !== 0) return;
-      
-      const tr = td.closest('tr');
-      const row = +tr.dataset.row;
-      const col = +td.dataset.idx;
-      
-      if (!e.shiftKey) {
-        this.clearCellSelection();
-        sel.startRow = row;
-        sel.startCol = col;
-        sel.endRow = row;
-        sel.endCol = col;
-      } else {
-        sel.endRow = row;
-        sel.endCol = col;
-      }
-      sel.active = true;
-      sel.tableEl = tableEl;
-      isSelecting = true;
-      this.updateCellSelection();
-    });
-
-    tableEl.addEventListener('mousemove', (e) => {
-      if (!isSelecting) return;
-      const td = e.target.closest('td[data-col]');
-      if (!td) return;
-      
-      const tr = td.closest('tr');
-      const row = +tr.dataset.row;
-      const col = +td.dataset.idx;
-      
-      sel.endRow = row;
-      sel.endCol = col;
-      this.updateCellSelection();
-    });
-
-    document.addEventListener('mouseup', () => {
-      isSelecting = false;
-    });
-
-    tableEl.addEventListener('contextmenu', (e) => {
-      if (!sel.active) return;
-      e.preventDefault();
-      this.showCellContextMenu(e.clientX, e.clientY, tabId);
-    });
-  },
-
-  clearCellSelection() {
-    const sel = this.cellSelection;
-    if (sel.tableEl) {
-      sel.tableEl.querySelectorAll('.cell-selected, .cell-selecting').forEach(td => {
-        td.classList.remove('cell-selected', 'cell-selecting');
-      });
-    }
-    sel.active = false;
-    sel.startRow = -1;
-    sel.startCol = -1;
-    sel.endRow = -1;
-    sel.endCol = -1;
-  },
-
-  updateCellSelection() {
-    const sel = this.cellSelection;
-    if (!sel.tableEl) return;
-
-    const minRow = Math.min(sel.startRow, sel.endRow);
-    const maxRow = Math.max(sel.startRow, sel.endRow);
-    const minCol = Math.min(sel.startCol, sel.endCol);
-    const maxCol = Math.max(sel.startCol, sel.endCol);
-
-    sel.tableEl.querySelectorAll('td').forEach(td => {
-      td.classList.remove('cell-selected', 'cell-selecting');
-    });
-
-    sel.tableEl.querySelectorAll('tr[data-row]').forEach(tr => {
-      const row = +tr.dataset.row;
-      if (row < minRow || row > maxRow) return;
-      tr.querySelectorAll('td[data-col]').forEach(td => {
-        const col = +td.dataset.idx;
-        if (col >= minCol && col <= maxCol) {
-          td.classList.add('cell-selected');
-        }
-      });
-    });
-  },
-
-  getSelectedCellData() {
-    const sel = this.cellSelection;
-    if (!sel.tableEl || !sel.active) return null;
-
-    const minRow = Math.min(sel.startRow, sel.endRow);
-    const maxRow = Math.max(sel.startRow, sel.endRow);
-    const minCol = Math.min(sel.startCol, sel.endCol);
-    const maxCol = Math.max(sel.startCol, sel.endCol);
-
-    const rows = [];
-    sel.tableEl.querySelectorAll('tr[data-row]').forEach(tr => {
-      const row = +tr.dataset.row;
-      if (row < minRow || row > maxRow) return;
-      const rowData = [];
-      tr.querySelectorAll('td[data-col]').forEach(td => {
-        const col = +td.dataset.idx;
-        if (col >= minCol && col <= maxCol) {
-          rowData.push(td.textContent);
-        }
-      });
-      rows.push(rowData);
-    });
-
-    return { rows, minRow, maxRow, minCol, maxCol };
-  },
-
-  async showCellContextMenu(x, y, tabId) {
-    const items = [
-      { label: '複製', action: 'copy', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' },
-      { label: '匯出選取為 CSV', action: 'export-csv', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' }
-    ];
-
-    const action = await this.showContextMenu(x, y, items);
-    
-    if (action === 'copy') {
-      this.copySelectedCells();
-    } else if (action === 'export-csv') {
-      this.exportSelectedCellsAsCSV();
-    }
-  },
-
-  copySelectedCells() {
-    const data = this.getSelectedCellData();
-    if (!data) return;
-
-    const text = data.rows.map(row => row.join('\t')).join('\n');
-    navigator.clipboard.writeText(text).then(() => {
-      this.toast('已複製到剪貼簿', 'success');
-    }).catch(() => {
-      this.toast('複製失敗', 'error');
-    });
-  },
-
-  exportSelectedCellsAsCSV() {
-    const data = this.getSelectedCellData();
-    if (!data) return;
-
-    const csv = data.rows.map(row => 
-      row.map(cell => {
-        if (cell === 'NULL') return '';
-        const s = String(cell);
-        return s.includes(',') || s.includes('"') || s.includes('\n') 
-          ? `"${s.replace(/"/g, '""')}"` 
-          : s;
-      }).join(',')
-    ).join('\n');
-
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `selection_${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-    this.toast('選取範圍已匯出為 CSV', 'success');
-  },
-
-  // ── Data Search ──
-  initDataSearch(inputEl, tabId) {
-    let searchTimeout = null;
-    inputEl.addEventListener('input', () => {
-      clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(() => {
-        this.applyDataSearch(inputEl.value, tabId);
-      }, 200);
-    });
-  },
-
-  applyDataSearch(searchText, tabId) {
-    const tab = this.tabs.find(t => t.id === tabId);
-    if (!tab) return;
-    
-    const panel = document.querySelector(`.tab-panel[data-id="${tabId}"]`);
-    const wrapper = panel.querySelector('[data-field="table-wrapper"]');
-    const table = wrapper.querySelector('.data-table');
-    if (!table) return;
-
-    const search = searchText.toLowerCase().trim();
-    
-    table.querySelectorAll('tr[data-row]').forEach(tr => {
-      let rowMatch = false;
-      tr.querySelectorAll('td[data-col]').forEach(td => {
-        const text = td.textContent.toLowerCase();
-        const originalText = td.getAttribute('title') || td.textContent;
-        
-        if (search && text.includes(search)) {
-          rowMatch = true;
-          const regex = new RegExp(`(${search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-          const display = originalText.replace(regex, '<span class="search-highlight">$1</span>');
-          if (td.querySelector('.inline-edit-input')) return;
-          td.innerHTML = display;
-        } else {
-          if (td.querySelector('.inline-edit-input')) return;
-          td.textContent = originalText;
-        }
-      });
-      
-      if (search) {
-        tr.style.display = rowMatch ? '' : 'none';
-      } else {
-        tr.style.display = '';
-      }
-    });
-  },
-
-  // ── Keyboard Navigation ──
-  initKeyboardNavigation(tableEl, tabId) {
-    tableEl.setAttribute('tabindex', '0');
-    
-    tableEl.addEventListener('keydown', (e) => {
-      const focused = tableEl.querySelector('td:focus');
-      if (!focused) return;
-
-      const tr = focused.closest('tr');
-      const row = +tr.dataset.row;
-      const col = +focused.dataset.idx;
-      
-      const allRows = Array.from(tableEl.querySelectorAll('tr[data-row]'));
-      const currentRowIdx = allRows.indexOf(tr);
-
-      if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        const nextTd = tr.querySelector(`td[data-idx="${col + 1}"]`);
-        if (nextTd) nextTd.focus();
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        const prevTd = tr.querySelector(`td[data-idx="${col - 1}"]`);
-        if (prevTd) prevTd.focus();
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        const nextRow = allRows[currentRowIdx + 1];
-        if (nextRow) {
-          const nextTd = nextRow.querySelector(`td[data-idx="${col}"]`);
-          if (nextTd) nextTd.focus();
-        }
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        const prevRow = allRows[currentRowIdx - 1];
-        if (prevRow) {
-          const prevTd = prevRow.querySelector(`td[data-idx="${col}"]`);
-          if (prevTd) prevTd.focus();
-        }
-      } else if (e.key === 'Tab') {
-        e.preventDefault();
-        if (e.shiftKey) {
-          const prevTd = tr.querySelector(`td[data-idx="${col - 1}"]`);
-          if (prevTd) { prevTd.focus(); return; }
-          const prevRow = allRows[currentRowIdx - 1];
-          if (prevRow) {
-            const lastTd = prevRow.querySelector('td[data-col]:last-of-type');
-            if (lastTd) lastTd.focus();
-          }
-        } else {
-          const nextTd = tr.querySelector(`td[data-idx="${col + 1}"]`);
-          if (nextTd) { nextTd.focus(); return; }
-          const nextRow = allRows[currentRowIdx + 1];
-          if (nextRow) {
-            const firstTd = nextRow.querySelector('td[data-col]');
-            if (firstTd) firstTd.focus();
-          }
-        }
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        focused.dispatchEvent(new MouseEvent('dblclick'));
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        this.clearCellSelection();
-        tableEl.focus();
-      }
-    });
   },
 
   // ── Helper ──

@@ -1,6 +1,5 @@
 const App = {
   async init() {
-    this.initTheme();
     UI.setStatus('正在載入 SQL.js 引擎...');
     try {
       await DB.init();
@@ -20,7 +19,6 @@ const App = {
     document.getElementById('btnSave').onclick = () => this.saveDB();
     document.getElementById('btnNewDB').onclick = () => this.newDB();
     document.getElementById('toggleSidebar').onclick = () => this.toggleSidebar();
-    document.getElementById('btnTheme').onclick = () => this.toggleTheme();
 
     document.getElementById('btnOpenWelcome').onclick = () => this.openDB();
     document.getElementById('btnNewWelcome').onclick = () => this.newDB();
@@ -52,16 +50,11 @@ const App = {
         { label: '新建表', action: 'create-table' },
         { label: '關聯圖 (ERD)', action: 'erd' },
         { divider: true },
-        { label: '比較數據庫', action: 'compare-db' },
-        { label: '產生遷移腳本', action: 'generate-migration' },
-        { divider: true },
         { label: '壓縮資料庫 (VACUUM)', action: 'vacuum' },
         { label: '完整性檢查', action: 'integrity' },
         { divider: true },
         { label: '書籤', action: 'bookmarks' },
-        { label: '查詢歷史', action: 'history' },
-        { divider: true },
-        { label: '還原備份', action: 'restore-backups' }
+        { label: '查詢歷史', action: 'history' }
       ];
       UI.showContextMenu(e.clientX, e.clientY, items).then(action => {
         switch (action) {
@@ -70,13 +63,10 @@ const App = {
           case 'new-query': if (DB.db) Editor.openQuery(); break;
           case 'create-table': if (DB.db) TableOps.showCreateTableDialog(); break;
           case 'erd': if (DB.db) ERD.open(); break;
-          case 'compare-db': Enhancements2.showCompareDialog(); break;
-          case 'generate-migration': Enhancements2.showMigrationDialog(); break;
           case 'vacuum': this.vacuumDB(); break;
           case 'integrity': this.checkIntegrity(); break;
           case 'bookmarks': Editor.showBookmarks(); break;
           case 'history': Editor.showHistory(UI.activeTabId || 0); break;
-          case 'restore-backups': Enhancements.showRestoreDialog(); break;
         }
       });
     };
@@ -120,14 +110,6 @@ const App = {
     try {
       const opened = await DB.openFile();
       if (opened) {
-        // Close all existing tabs and clear DOM
-        document.getElementById('tabs').innerHTML = '';
-        document.getElementById('tabPanels').innerHTML = '';
-        UI.tabs = [];
-        UI.activeTabId = null;
-        document.getElementById('tabBar').style.display = 'none';
-        document.getElementById('tabPanels').style.display = 'none';
-
         this.onDBReady();
         UI.toast(`已開啟: ${DB.fileName}`, 'success');
       }
@@ -137,14 +119,6 @@ const App = {
   },
 
   newDB() {
-    // Close all existing tabs and clear DOM
-    document.getElementById('tabs').innerHTML = '';
-    document.getElementById('tabPanels').innerHTML = '';
-    UI.tabs = [];
-    UI.activeTabId = null;
-    document.getElementById('tabBar').style.display = 'none';
-    document.getElementById('tabPanels').style.display = 'none';
-
     DB.create();
     this.onDBReady();
     UI.toast('已建立新數據庫', 'success');
@@ -170,23 +144,6 @@ const App = {
 
     const info = DB.getDatabaseInfo();
     UI.setStatus(`已連線`, `${info.tableCount} 表 · ${info.viewCount} 視圖 · ${info.triggerCount} 觸發器 · ${info.indexCount} 索引`);
-
-    // Hook auto-backup for destructive operations
-    if (!DB._backupHooked) {
-      const origExecute = DB.execute.bind(DB);
-      const origRun = DB.run.bind(DB);
-      DB.execute = function(sql, params) {
-        const op = Enhancements.isDestructiveSQL(sql);
-        if (op) Enhancements.autoBackup(`${op}: ${sql.substring(0, 60)}`);
-        return origExecute(sql, params);
-      };
-      DB.run = function(sql, params) {
-        const op = Enhancements.isDestructiveSQL(sql);
-        if (op) Enhancements.autoBackup(`${op}: ${sql.substring(0, 60)}`);
-        return origRun(sql, params);
-      };
-      DB._backupHooked = true;
-    }
 
     if (UI.tabs.length === 0) {
       UI.openDashboard();
@@ -239,24 +196,6 @@ const App = {
       }
     } catch (e) {
       UI.toast('檢查失敗: ' + e.message, 'error');
-    }
-  },
-
-  toggleTheme() {
-    document.documentElement.classList.toggle('light');
-    const isLight = document.documentElement.classList.contains('light');
-    Storage.savePref('theme', isLight ? 'light' : 'dark');
-    const btn = document.getElementById('btnTheme');
-    btn.innerHTML = isLight
-      ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>'
-      : '<svg width="18" height="18" viewBox="0 0 24 24" load="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
-  },
-
-  initTheme() {
-    const saved = Storage.getPref('theme', 'dark');
-    if (saved === 'light') {
-      document.documentElement.classList.add('light');
-      document.getElementById('btnTheme').innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
     }
   },
 

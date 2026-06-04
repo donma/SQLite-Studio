@@ -6,15 +6,7 @@ const DB = {
     modified: false,
 
     async init() {
-        if (window.isSecureContext && typeof initSqlJs === 'function') {
-            // WASM version - needs locateFile for the wasm binary
-            this.SQL = await initSqlJs({
-                locateFile: file => `lib/${file}`
-            });
-        } else {
-            // asm.js version - no locateFile needed
-            this.SQL = await initSqlJs();
-        }
+        this.SQL = await initSqlJs();
     },
 
     create() {
