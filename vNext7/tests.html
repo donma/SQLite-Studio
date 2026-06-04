@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SQLite Studio - Unit Tests</title>
+  <style>
+    body { font-family: monospace; max-width: 800px; margin: 40px auto; padding: 20px; background: #0f1117; color: #e4e6f0; }
+    h1 { color: #6c5ce7; }
+    .pass { color: #00d68f; }
+    .fail { color: #ff6b6b; }
+    .suite { margin: 20px 0; padding: 16px; background: #161822; border-radius: 8px; border: 1px solid #2a2d40; }
+    .suite h2 { margin: 0 0 12px; font-size: 16px; color: #4fc3f7; }
+    .test { padding: 4px 0; font-size: 13px; }
+    .summary { margin-top: 20px; padding: 16px; background: #1c1f2e; border-radius: 8px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1>SQLite Studio - Unit Tests</h1>
+  <div id="results"></div>
+  <div id="summary" class="summary"></div>
+
+  <script src="lib/sql-asm.js"></script>
+  <script src="js/sql-utils.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/db.js"></script>
+  <script>
+    const results = document.getElementById('results');
+    const summary = document.getElementById('summary');
+    let passed = 0, failed = 0;
+
+    function describe(name, fn) {
+      const suite = document.createElement('div');
+      suite.className = 'suite';
+      suite.innerHTML = `<h2>${name}</h2>`;
+      results.appendChild(suite);
+      fn(suite);
+    }
+
+    function it(name, fn, suite) {
+      const test = document.createElement('div');
+      test.className = 'test';
+      try {
+        fn();
+        test.innerHTML = `<span class="pass">✓</span> ${name}`;
+        passed++;
+      } catch (e) {
+        test.innerHTML = `<span class="fail">✗</span> ${name}: ${e.message}`;
+        failed++;
+      }
+      suite.appendChild(test);
+    }
+
+    function assert(condition, message) {
+      if (!condition) throw new Error(message || 'Assertion failed');
+    }
+
+    function assertEqual(actual, expected, message) {
+      if (actual !== expected) {
+        throw new Error(message || `Expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+      }
+    }
+
+    async function runTests() {
+      // SqlUtils tests
+      describe('SqlUtils.quoteIdent', (suite) => {
+        it('should quote simple name', () => {
+          assertEqual(SqlUtils.quoteIdent('users'), '"users"');
+        }, suite);
+
+        it('should escape double quotes', () => {
+          assertEqual(SqlUtils.quoteIdent('my"table'), '"my""table"');
+        }, suite);
+
+        it('should handle numbers', () => {
+          assertEqual(SqlUtils.quoteIdent(123), '"123"');
+        }, suite);
+
+        it('should throw on null', () => {
+          let threw = false;
+          try { SqlUtils.quoteIdent(null); } catch { threw = true; }
+          assert(threw, 'Should throw on null');
+        }, suite);
+
+        it('should handle reserved words', () => {
+          assertEqual(SqlUtils.quoteIdent('order'), '"order"');
+          assertEqual(SqlUtils.quoteIdent('select'), '"select"');
+        }, suite);
+
+        it('should handle unicode', () => {
+          assertEqual(SqlUtils.quoteIdent('使用者'), '"使用者"');
+        }, suite);
+      });
+
+      describe('SqlUtils.quoteIdentList', (suite) => {
+        it('should quote multiple names', () => {
+          assertEqual(SqlUtils.quoteIdentList(['a', 'b', 'c']), '"a", "b", "c"');
+        }, suite);
+
+        it('should handle empty array', () => {
+          assertEqual(SqlUtils.quoteIdentList([]), '');
+        }, suite);
+
+        it('should throw on non-array', () => {
+          let threw = false;
+          try { SqlUtils.quoteIdentList('not array'); } catch { threw = true; }
+          assert(threw, 'Should throw on non-array');
+        }, suite);
+      });
+
+      describe('SqlUtils.isWriteSql', (suite) => {
+        it('should detect SELECT as read', () => {
+          assert(!SqlUtils.isWriteSql('SELECT * FROM users'));
+        }, suite);
+
+        it('should detect INSERT as write', () => {
+          assert(SqlUtils.isWriteSql('INSERT INTO users VALUES (1)'));
+        }, suite);
+
+        it('should detect UPDATE as write', () => {
+          assert(SqlUtils.isWriteSql('UPDATE users SET name = "test"'));
+        }, suite);
+
+        it('should detect DELETE as write', () => {
+          assert(SqlUtils.isWriteSql('DELETE FROM users WHERE id = 1'));
+        }, suite);
+
+        it('should detect CREATE as write', () => {
+          assert(SqlUtils.isWriteSql('CREATE TABLE test (id INT)'));
+        }, suite);
+
+        it('should detect DROP as write', () => {
+          assert(SqlUtils.isWriteSql('DROP TABLE test'));
+        }, suite);
+
+        it('should detect ALTER as write', () => {
+          assert(SqlUtils.isWriteSql('ALTER TABLE test ADD col TEXT'));
+        }, suite);
+
+        it('should detect PRAGMA as read', () => {
+          assert(!SqlUtils.isWriteSql('PRAGMA table_info(users)'));
+        }, suite);
+
+        it('should detect EXPLAIN as read', () => {
+          assert(!SqlUtils.isWriteSql('EXPLAIN SELECT * FROM users'));
+        }, suite);
+
+        it('should handle comments', () => {
+          assert(!SqlUtils.isWriteSql('-- comment\nSELECT * FROM users'));
+          assert(SqlUtils.isWriteSql('-- comment\nINSERT INTO users VALUES (1)'));
+        }, suite);
+
+        it('should handle block comments', () => {
+          assert(!SqlUtils.isWriteSql('/* block */ SELECT * FROM users'));
+        }, suite);
+
+        it('should handle whitespace', () => {
+          assert(!SqlUtils.isWriteSql('  SELECT * FROM users  '));
+        }, suite);
+      });
+
+      // DB tests
+      describe('DB', (suite) => {
+        it('should initialize', async () => {
+          await DB.init();
+          assert(DB.SQL !== null);
+        }, suite);
+
+        it('should create database', () => {
+          DB.create();
+          assert(DB.db !== null);
+          assertEqual(DB.fileName, 'untitled.sqlite');
+          assert(!DB.modified);
+        }, suite);
+
+        it('should execute write SQL and mark modified', () => {
+          DB.modified = false;
+          DB.execute('CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)');
+          assert(DB.modified);
+        }, suite);
+
+        it('should query without marking modified', () => {
+          DB.modified = false;
+          DB.query('SELECT * FROM test');
+          assert(!DB.modified);
+        }, suite);
+
+        it('should run SELECT without marking modified', () => {
+          DB.modified = false;
+          DB.run('SELECT * FROM test');
+          assert(!DB.modified);
+        }, suite);
+
+        it('should run INSERT and mark modified', () => {
+          DB.modified = false;
+          DB.run('INSERT INTO test VALUES (1, "hello")');
+          assert(DB.modified);
+        }, suite);
+
+        it('should get table names', () => {
+          const tables = DB.getTableNames();
+          assert(tables.includes('test'));
+        }, suite);
+
+        it('should get table info', () => {
+          const info = DB.getTableInfo('test');
+          assertEqual(info.length, 2);
+          assertEqual(info[0].name, 'id');
+          assertEqual(info[1].name, 'name');
+        }, suite);
+
+        it('should get table count', () => {
+          const count = DB.getTableCount('test');
+          assertEqual(count, 1);
+        }, suite);
+
+        it('should get table data', () => {
+          const data = DB.getTableData('test');
+          assertEqual(data.columns.length, 2);
+          assertEqual(data.rows.length, 1);
+          assertEqual(data.total, 1);
+        }, suite);
+
+        it('should handle transaction', () => {
+          DB.modified = false;
+          DB.begin();
+          DB.execute('INSERT INTO test VALUES (2, "world")');
+          DB.commit();
+          assert(DB.modified);
+          assertEqual(DB.getTableCount('test'), 2);
+        }, suite);
+
+        it('should handle rollback', () => {
+          const countBefore = DB.getTableCount('test');
+          DB.begin();
+          DB.execute('INSERT INTO test VALUES (3, "rollback")');
+          DB.rollback();
+          assertEqual(DB.getTableCount('test'), countBefore);
+        }, suite);
+
+        it('should vacuum', () => {
+          const result = DB.vacuum();
+          assert(result.before > 0);
+          assert(result.after > 0);
+        }, suite);
+
+        it('should integrity check', () => {
+          const result = DB.integrityCheck();
+          assert(result.length > 0);
+          assertEqual(result[0][0], 'ok');
+        }, suite);
+      });
+
+      // Summary
+      summary.innerHTML = `
+        <div>Total: ${passed + failed}</div>
+        <div class="pass">Passed: ${passed}</div>
+        <div class="fail">Failed: ${failed}</div>
+        ${failed === 0 ? '<div class="pass" style="margin-top:12px;font-size:16px">All tests passed!</div>' : ''}
+      `;
+    }
+
+    runTests();
+  </script>
+</body>
+</html>
